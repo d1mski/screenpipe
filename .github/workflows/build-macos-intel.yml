@@ -14,8 +14,7 @@ on:
 
 jobs:
   build-intel:
-    runs-on: macos-latest
-    timeout-minutes: 120
+    runs-on: macos-13    timeout-minutes: 120
     
     steps:
       - name: Checkout
