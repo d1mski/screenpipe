@@ -1,0 +1,163 @@
+name: Build macOS Intel App
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/screenpipe-app-tauri/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/build-macos-intel.yml"
+
+jobs:
+  build-intel:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92.0"
+          targets: x86_64-apple-darwin
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-rust-x86_64-apple-darwin-${{ hashFiles('**/Cargo.lock') }}
+          cache-directories: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/x86_64-apple-darwin
+            apps/screenpipe-app-tauri/src-tauri/target
+          shared-key: "rust-cache-x86_64-apple-darwin"
+          save-if: true
+
+      - name: Cache Homebrew packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew
+            /usr/local/Cellar/ffmpeg
+            /usr/local/Cellar/pkg-config
+          key: ${{ runner.os }}-brew-${{ hashFiles('.github/workflows/build-macos-intel.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-brew-
+
+      - name: Cache Pre Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/screenpipe-app-tauri/src-tauri/ffmpeg
+            apps/screenpipe-app-tauri/src-tauri/tesseract-*
+            apps/screenpipe-app-tauri/node_modules
+            apps/screenpipe-app-tauri/src-tauri/target
+            apps/screenpipe-app-tauri/.tauri
+            apps/screenpipe-app-tauri/src-tauri/ollama-*
+            apps/screenpipe-app-tauri/src-tauri/lib/ollama
+            apps/screenpipe-app-tauri/src-tauri/ui_monitor-*
+            apps/screenpipe-app-tauri/src-tauri/ffmpeg-*
+            apps/screenpipe-app-tauri/src-tauri/bun-*
+          key: macos-latest-x86_64-apple-darwin-pre-build-${{ hashFiles('**/Cargo.lock', '**/bun.lockb') }}
+          restore-keys: |
+            macos-latest-x86_64-apple-darwin-pre-build-
+
+      - name: Install FFmpeg
+        run: brew install ffmpeg
+
+      - name: Install frontend dependencies
+        working-directory: ./apps/screenpipe-app-tauri
+        run: bun install
+
+      - name: Run pre_build.js
+        env:
+          SKIP_SCREENPIPE_SETUP: true
+        run: bun ./scripts/pre_build.js
+        working-directory: ./apps/screenpipe-app-tauri
+
+      - name: Build core screenpipe binary
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
+        run: |
+          cargo build --release --target x86_64-apple-darwin --features metal
+
+      - name: Symlink screenpipe binary into Tauri app
+        working-directory: apps/screenpipe-app-tauri
+        run: |
+          mkdir -p src-tauri
+          ln -sf ../../target/x86_64-apple-darwin/release/screenpipe \
+            src-tauri/screenpipe-x86_64-apple-darwin
+          ls -lh src-tauri/screenpipe-*
+
+      - name: Use production config
+        run: |
+          if [ -f apps/screenpipe-app-tauri/src-tauri/tauri.prod.conf.json ]; then
+            cp apps/screenpipe-app-tauri/src-tauri/tauri.prod.conf.json \
+               apps/screenpipe-app-tauri/src-tauri/tauri.conf.json
+          fi
+
+      - name: Build Tauri macOS app (Intel)
+        uses: tauri-apps/tauri-action@v0.5.17
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
+          CMAKE_OSX_DEPLOYMENT_TARGET: "10.15"
+          CFLAGS: "-mmacosx-version-min=10.15"
+          CXXFLAGS: "-mmacosx-version-min=10.15"
+          CMAKE_C_FLAGS: "-mmacosx-version-min=10.15"
+          CMAKE_CXX_FLAGS: "-mmacosx-version-min=10.15"
+          CARGO_PROFILE_RELEASE_STRIP: none
+          CARGO_PROFILE_RELEASE_PANIC: unwind
+          CARGO_PROFILE_RELEASE_INCREMENTAL: true
+        with:
+          args: "--target x86_64-apple-darwin --features metal"
+          projectPath: "./apps/screenpipe-app-tauri"
+          tauriScript: bunx tauri -vvv
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts
+          # Find and copy the built .app or .dmg
+          find apps/screenpipe-app-tauri/src-tauri/target/x86_64-apple-darwin/release/bundle \
+            -type f \( -name "*.dmg" -o -name "*.app" \) \
+            -exec cp -R {} artifacts/ \;
+          # If .app exists, zip it for easier download
+          if [ -d artifacts/*.app ]; then
+            cd artifacts
+            for app in *.app; do
+              if [ -d "$app" ]; then
+                zip -r "${app%.app}-x86_64-unsigned.zip" "$app"
+                rm -rf "$app"
+              fi
+            done
+            cd ..
+          fi
+          ls -lh artifacts/
+
+      - name: Upload Intel macOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenpipe-macos-intel-x86_64
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
