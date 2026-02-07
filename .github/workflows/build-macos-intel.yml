@@ -97,7 +97,7 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "10.15"
         run: |
-          cargo build --release --target x86_64-apple-darwin --features metal --exclude screenpipe-apple-intelligence
+          cargo build --release --target x86_64-apple-darwin --features metal  --workspace--exclude screenpipe-apple-intelligence
 
       - name: Symlink screenpipe binary into Tauri app
         working-directory: apps/screenpipe-app-tauri
