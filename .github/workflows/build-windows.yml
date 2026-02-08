@@ -91,6 +91,7 @@ jobs:
             apps/screenpipe-app-tauri/src-tauri/lib/ollama
             apps/screenpipe-app-tauri/src-tauri/ffmpeg-*
             apps/screenpipe-app-tauri/src-tauri/bun-*
+            apps/screenpipe-app-tauri/src-tauri/onnxruntime-*
           key: windows-2019-x86_64-pc-windows-msvc-pre-build-${{ hashFiles('**/Cargo.lock', '**/bun.lockb') }}
           restore-keys: |
             windows-2019-x86_64-pc-windows-msvc-pre-build-
@@ -179,6 +180,33 @@ jobs:
           $env:Path = "$wgetDir;$env:Path"
 
           & "$wgetDir\wget.exe" --version
+
+      - name: Download ONNX Runtime
+        shell: powershell
+        working-directory: apps/screenpipe-app-tauri/src-tauri
+        run: |
+          # ONNX Runtime 1.19.2 with DirectML support (matches ort 2.0.0-rc.6)
+          $ortVersion = "1.19.2"
+          $ortDir = "onnxruntime-win-x64-directml-$ortVersion"
+
+          if (!(Test-Path $ortDir)) {
+            Write-Host "Downloading ONNX Runtime $ortVersion with DirectML..."
+            $ortUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$ortVersion/onnxruntime-win-x64-directml-$ortVersion.zip"
+            Invoke-WebRequest -Uri $ortUrl -OutFile "onnxruntime.zip"
+
+            Write-Host "Extracting ONNX Runtime..."
+            Expand-Archive -Path "onnxruntime.zip" -DestinationPath . -Force
+            Remove-Item "onnxruntime.zip"
+          }
+
+          # Set environment variables for ort crate
+          $ortPath = "$PWD\$ortDir"
+          echo "ORT_LIB_LOCATION=$ortPath\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "ORT_DYLIB_PATH=$ortPath\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Verify files exist
+          Write-Host "ONNX Runtime files:"
+          Get-ChildItem -Path "$ortPath\lib" -Filter "*.dll" | ForEach-Object { Write-Host "  $_" }
 
       - name: Run pre_build.js
         env:
