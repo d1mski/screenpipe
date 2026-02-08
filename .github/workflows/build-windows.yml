@@ -185,13 +185,13 @@ jobs:
         shell: powershell
         working-directory: apps/screenpipe-app-tauri/src-tauri
         run: |
-          # ONNX Runtime 1.19.2 with DirectML support (matches ort 2.0.0-rc.6)
+          # ONNX Runtime 1.19.2 (matches ort 2.0.0-rc.6)
           $ortVersion = "1.19.2"
-          $ortDir = "onnxruntime-win-x64-directml-$ortVersion"
+          $ortDir = "onnxruntime-win-x64-$ortVersion"
 
           if (!(Test-Path $ortDir)) {
-            Write-Host "Downloading ONNX Runtime $ortVersion with DirectML..."
-            $ortUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$ortVersion/onnxruntime-win-x64-directml-$ortVersion.zip"
+            Write-Host "Downloading ONNX Runtime $ortVersion..."
+            $ortUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$ortVersion/onnxruntime-win-x64-$ortVersion.zip"
             Invoke-WebRequest -Uri $ortUrl -OutFile "onnxruntime.zip"
 
             Write-Host "Extracting ONNX Runtime..."
