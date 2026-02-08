@@ -107,7 +107,20 @@ jobs:
             src-tauri/screenpipe-x86_64-apple-darwin
           ls -lh src-tauri/screenpipe-*
 
+      - name: Check signing key availability
+        id: check_signing_key
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY not set - skipping production config and updater signing"
+          fi
+
       - name: Use production config
+        if: steps.check_signing_key.outputs.available == 'true'
         run: |
           if [ -f apps/screenpipe-app-tauri/src-tauri/tauri.prod.conf.json ]; then
             cp apps/screenpipe-app-tauri/src-tauri/tauri.prod.conf.json \
@@ -128,8 +141,8 @@ jobs:
           CARGO_PROFILE_RELEASE_STRIP: none
           CARGO_PROFILE_RELEASE_PANIC: unwind
           CARGO_PROFILE_RELEASE_INCREMENTAL: true
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         with:
           args: "--target x86_64-apple-darwin --features metal"
           projectPath: "./apps/screenpipe-app-tauri"
