@@ -107,8 +107,21 @@ jobs:
             src-tauri/screenpipe-x86_64-apple-darwin
           ls -lh src-tauri/screenpipe-*
 
-      - name: Skip production config (no updater signing)
-        run: echo "Using dev config - updater signing disabled"
+      - name: Patch config for unsigned build
+        working-directory: apps/screenpipe-app-tauri/src-tauri
+        run: |
+          # Remove macOS signing identity so codesign doesn't fail without a certificate
+          python3 -c "
+          import json, sys
+          with open('tauri.conf.json') as f:
+              cfg = json.load(f)
+          mac = cfg.get('bundle', {}).get('macOS', {})
+          mac.pop('signingIdentity', None)
+          mac.pop('hardenedRuntime', None)
+          with open('tauri.conf.json', 'w') as f:
+              json.dump(cfg, f, indent=2)
+          "
+          echo "Removed macOS signingIdentity for unsigned build"
 
       - name: Build Tauri macOS app (Intel)
         uses: tauri-apps/tauri-action@v0.5.17
