@@ -91,7 +91,7 @@ jobs:
             apps/screenpipe-app-tauri/src-tauri/lib/ollama
             apps/screenpipe-app-tauri/src-tauri/ffmpeg-*
             apps/screenpipe-app-tauri/src-tauri/bun-*
-            apps/screenpipe-app-tauri/src-tauri/onnxruntime-*
+            apps/screenpipe-app-tauri/src-tauri/onnxruntime
           key: windows-2019-x86_64-pc-windows-msvc-pre-build-${{ hashFiles('**/Cargo.lock', '**/bun.lockb') }}
           restore-keys: |
             windows-2019-x86_64-pc-windows-msvc-pre-build-
@@ -188,7 +188,7 @@ jobs:
           # ONNX Runtime 1.19.2 GPU version (includes providers_shared.dll needed for CUDA/DirectML)
           $ortVersion = "1.19.2"
           $ortZipDir = "onnxruntime-win-x64-gpu-$ortVersion"
-          # Use a simple directory name that matches tauri.windows.conf.json glob pattern
+          # Use a simple directory name that matches tauri.windows.conf.json resource paths
           $ortDir = "onnxruntime"
 
           if (!(Test-Path "$ortDir\lib\onnxruntime.dll")) {
