@@ -187,9 +187,11 @@ jobs:
         run: |
           # ONNX Runtime 1.19.2 GPU version (includes providers_shared.dll needed for CUDA/DirectML)
           $ortVersion = "1.19.2"
-          $ortDir = "onnxruntime-win-x64-gpu-$ortVersion"
+          $ortZipDir = "onnxruntime-win-x64-gpu-$ortVersion"
+          # Use a simple directory name that matches tauri.windows.conf.json glob pattern
+          $ortDir = "onnxruntime"
 
-          if (!(Test-Path $ortDir)) {
+          if (!(Test-Path "$ortDir\lib\onnxruntime.dll")) {
             Write-Host "Downloading ONNX Runtime $ortVersion (GPU)..."
             $ortUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$ortVersion/onnxruntime-win-x64-gpu-$ortVersion.zip"
             Invoke-WebRequest -Uri $ortUrl -OutFile "onnxruntime.zip"
@@ -197,6 +199,10 @@ jobs:
             Write-Host "Extracting ONNX Runtime..."
             Expand-Archive -Path "onnxruntime.zip" -DestinationPath . -Force
             Remove-Item "onnxruntime.zip"
+
+            # Rename to simple directory name
+            if (Test-Path $ortDir) { Remove-Item -Recurse -Force $ortDir }
+            Rename-Item $ortZipDir $ortDir
           }
 
           # Set environment variables for ort crate
@@ -205,8 +211,21 @@ jobs:
           echo "ORT_DYLIB_PATH=$ortPath\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           # Verify files exist
+          Write-Host "ONNX Runtime directory: $ortPath"
           Write-Host "ONNX Runtime files:"
-          Get-ChildItem -Path "$ortPath\lib" -Filter "*.dll" | ForEach-Object { Write-Host "  $_" }
+          Get-ChildItem -Path "$ortPath\lib" -Filter "*.dll" | ForEach-Object { Write-Host "  $($_.Name)" }
+
+          # Verify specific files needed
+          $requiredFiles = @("onnxruntime.dll", "onnxruntime_providers_cuda.dll", "onnxruntime_providers_shared.dll")
+          foreach ($file in $requiredFiles) {
+            $filePath = "$ortPath\lib\$file"
+            if (Test-Path $filePath) {
+              Write-Host "  [OK] $file exists"
+            } else {
+              Write-Host "  [MISSING] $file"
+              exit 1
+            }
+          }
 
       - name: Run pre_build.js
         env:
